@@ -1566,7 +1566,7 @@ function downloadResults() {
   const wsData = [];
 
   // Title row
-  wsData.push([null, null, `RCC Week ${weekNum} The ${activeCourse.name}`]);
+  wsData.push([`RCC Week ${weekNum} The ${activeCourse.name}`, '', '', '', '', '', '', '', '', '', '', '']);
 
   const getPlayerName = (pid) => { const p=allSelectablePlayers().find(x=>x.id===pid); return p?p.name:'?'; };
   const getScore = (pid, hole) => (scoreMap[pid]||{})[hole] ?? (groupScores[pid]||{})[hole] ?? null;
@@ -1632,37 +1632,37 @@ function downloadResults() {
       const p1hc=getEffectiveHandicap(pids[0]), p2hc=getEffectiveHandicap(pids[1]);
 
       // HCP row: 1 on each stroke hole (relative to this team being weaker)
-      const hcpRow=[null,'HCP'];
+      const hcpRow=['','HCP'];
       for(let h=0;h<9;h++){
-        hcpRow.push(isWeaker&&strokeHoles.includes(h)?1:null);
+        hcpRow.push(isWeaker&&strokeHoles.includes(h)?1:'');
       }
-      hcpRow.push(null,null);
+      hcpRow.push('','');
 
       // Header row
-      wsData.push([null,'HOLE',1,2,3,4,5,6,7,8,9,null,null]);
+      wsData.push(['','HOLE',1,2,3,4,5,6,7,8,9,'','']);
       wsData.push(hcpRow);
-      wsData.push([null,null,null,null,null,null,null,null,null,null,null,'Total',null]);
+      wsData.push(['','','','','','','','','','','','Total','']);
 
       // Player 1 row
       const p1row=[p1name, p1hc];
       let p1total=0;
-      for(let h=1;h<=9;h++){const s=getScore(pids[0],h);p1row.push(s!==null?s:null);if(s!==null)p1total+=s;}
-      p1row.push(p1total>0?p1total:null,null);
+      for(let h=1;h<=9;h++){const s=getScore(pids[0],h);p1row.push(s!==null?s:'');if(s!==null)p1total+=s;}
+      p1row.push(p1total>0?p1total:'','');
       wsData.push(p1row);
 
       // Player 2 row
       const p2row=[p2name, p2hc];
       let p2total=0;
-      for(let h=1;h<=9;h++){const s=getScore(pids[1],h);p2row.push(s!==null?s:null);if(s!==null)p2total+=s;}
-      p2row.push(p2total>0?p2total:null,null);
+      for(let h=1;h<=9;h++){const s=getScore(pids[1],h);p2row.push(s!==null?s:'');if(s!==null)p2total+=s;}
+      p2row.push(p2total>0?p2total:'','');
       wsData.push(p2row);
 
       // Team row: combined hdcp, net total
-      const teamNetTotal=netTotal>0?netTotal:null;
-      wsData.push(['Team',teamHdcp,null,null,null,null,null,null,null,null,null,teamNetTotal,null]);
+      const teamNetTotal=netTotal>0?netTotal:'';
+      wsData.push(['Team',teamHdcp,'','','','','','','','','',teamNetTotal,'']);
 
       // Pts row: hole-by-hole points
-      const ptsRow=['Pts',null];
+      const ptsRow=['Pts',''];
       for(let h=1;h<=9;h++){
         const r=holeResults.find(x=>x.h===h);
         // Determine pts for this team
@@ -1672,31 +1672,31 @@ function downloadResults() {
           const isTeam1=pids[0]===t1.pids[0]||pids[0]===t1.pids[1];
           pts=isTeam1?r.t1pts:r.t2pts;
         }
-        ptsRow.push(pts!==null?pts:null);
+        ptsRow.push(pts!==null?pts:'');
       }
       ptsRow.push(holePts,'Hole Pts');
       wsData.push(ptsRow);
 
       // Totals pts row
-      wsData.push([null,null,null,null,null,null,null,null,null,null,null,totalsPts,'Totals Pts']);
+      wsData.push(['','','','','','','','','','','',totalsPts,'Totals Pts']);
 
       // Final pts row
-      wsData.push([null,null,null,null,null,null,null,null,null,null,null,finalPts,'Final Pts']);
+      wsData.push(['','','','','','','','','','','',finalPts,'Final Pts']);
     };
 
     // Team 1 block
     buildTeamBlock(t1, team1Hdcp, t1.pids, team1HolePts, team1TotalsPts, team1Final, team1TotalStrokes, weakerIsTeam1);
 
     // vs separator
-    wsData.push(['vs']);
-    wsData.push([]);
+    wsData.push(['vs','','','','','','','','','','','','']);
+    wsData.push(['','','','','','','','','','','','','']);
 
     // Team 2 block
     buildTeamBlock(t2, team2Hdcp, t2.pids, team2HolePts, team2TotalsPts, team2Final, team2TotalStrokes, !weakerIsTeam1);
 
     // Blank separator between matchups
-    wsData.push([]);
-    wsData.push([]);
+    wsData.push(['','','','','','','','','','','','','']);
+    wsData.push(['','','','','','','','','','','','','']);
   });
 
   const ws=XLSX.utils.aoa_to_sheet(wsData);
