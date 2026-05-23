@@ -1555,156 +1555,180 @@ async function confirmSub(matchupId, slot) {
 }
 
 function downloadResults() {
-  const weekNum=document.getElementById('weekNumInput')?.value;
-  const msg=document.getElementById('exportMsg');
-  if(!weekNum){msg.textContent='Enter a week number.';msg.className='admin-msg err';return;}
-  if(!activeRound||!activeCourse){msg.textContent='No active round.';msg.className='admin-msg err';return;}
-  if(matchups.length===0){msg.textContent='No matchups set for this round.';msg.className='admin-msg err';return;}
+  const weekNum = document.getElementById('weekNumInput')?.value;
+  const msg = document.getElementById('exportMsg');
+  try {
+    if (!weekNum) { msg.textContent='Enter a week number.'; msg.className='admin-msg err'; return; }
+    if (!activeRound || !activeCourse) { msg.textContent='No active round.'; msg.className='admin-msg err'; return; }
+    if (matchups.length === 0) { msg.textContent='No matchups set.'; msg.className='admin-msg err'; return; }
 
-  const cd = courseData();
-  const wb = XLSX.utils.book_new();
-  const wsData = [];
+    const courseName = activeCourse.name || '';
+    const wb = XLSX.utils.book_new();
+    const wsData = [];
 
-  // Title row
-  wsData.push([`RCC Week ${weekNum} The ${activeCourse.name}`, '', '', '', '', '', '', '', '', '', '', '']);
+    wsData.push(['RCC Week ' + weekNum + ' The ' + courseName]);
 
-  const getPlayerName = (pid) => { const p=allSelectablePlayers().find(x=>x.id===pid); return p?p.name:'?'; };
-  const getScore = (pid, hole) => (scoreMap[pid]||{})[hole] ?? (groupScores[pid]||{})[hole] ?? null;
+    for (var mi = 0; mi < matchups.length; mi++) {
+      var m = matchups[mi];
+      var t1 = getTeamDisplay(m.team1_id, m.id, 1);
+      var t2 = getTeamDisplay(m.team2_id, m.id, 2);
 
-  matchups.forEach((m, mIdx) => {
-    const t1 = getTeamDisplay(m.team1_id, m.id, 1);
-    const t2 = getTeamDisplay(m.team2_id, m.id, 2);
+      var t1p1hc = getEffectiveHandicap(t1.pids[0]);
+      var t1p2hc = getEffectiveHandicap(t1.pids[1]);
+      var t2p1hc = getEffectiveHandicap(t2.pids[0]);
+      var t2p2hc = getEffectiveHandicap(t2.pids[1]);
+      var team1Hdcp = t1p1hc + t1p2hc;
+      var team2Hdcp = t2p1hc + t2p2hc;
+      var sh = getStrokeHoles(team1Hdcp, team2Hdcp, courseName);
+      var weakerIsTeam1 = sh.weakerIsA;
+      var strokeHoles = sh.strokeHoles;
 
-    // Handicaps
-    const t1p1hc = getEffectiveHandicap(t1.pids[0]);
-    const t1p2hc = getEffectiveHandicap(t1.pids[1]);
-    const t2p1hc = getEffectiveHandicap(t2.pids[0]);
-    const t2p2hc = getEffectiveHandicap(t2.pids[1]);
-    const team1Hdcp = t1p1hc + t1p2hc;
-    const team2Hdcp = t2p1hc + t2p2hc;
-    const { weakerIsA: weakerIsTeam1, strokeHoles } = getStrokeHoles(team1Hdcp, team2Hdcp, activeCourse.name);
-
-    // Build per-hole scoring for both teams
-    let team1HolePts=0, team2HolePts=0;
-    let team1TotalStrokes=0, team2TotalStrokes=0;
-    let team1HolesPlayed=0, team2HolesPlayed=0;
-    const holeResults=[];
-
-    for(let h=1;h<=9;h++){
-      const hIdx=h-1;
-      const t1s1=getScore(t1.pids[0],h), t1s2=getScore(t1.pids[1],h);
-      const t2s1=getScore(t2.pids[0],h), t2s2=getScore(t2.pids[1],h);
-      const t1both=t1s1!==null&&t1s2!==null, t2both=t2s1!==null&&t2s2!==null;
-      const t1Combined=t1both?t1s1+t1s2:null, t2Combined=t2both?t2s1+t2s2:null;
-      const isStrokeHole=strokeHoles.includes(hIdx);
-      let t1Net=t1Combined, t2Net=t2Combined;
-      if(isStrokeHole){
-        if(weakerIsTeam1&&t1Net!==null) t1Net-=1;
-        else if(!weakerIsTeam1&&t2Net!==null) t2Net-=1;
-      }
-      let t1pts=null, t2pts=null;
-      if(t1both&&t2both){
-        if(t1Net<t2Net){t1pts=2;t2pts=0;}
-        else if(t1Net===t2Net){t1pts=1;t2pts=1;}
-        else{t1pts=0;t2pts=2;}
-        team1HolePts+=t1pts; team2HolePts+=t2pts;
-      }
-      if(t1both){team1TotalStrokes+=t1Combined;team1HolesPlayed++;}
-      if(t2both){team2TotalStrokes+=t2Combined;team2HolesPlayed++;}
-      holeResults.push({h,hIdx,t1Combined,t2Combined,t1Net,t2Net,isStrokeHole,t1pts,t2pts,t1both,t2both});
-    }
-
-    const bothComplete=team1HolesPlayed===9&&team2HolesPlayed===9;
-    const t1NetTotal=holeResults.filter(r=>r.t1Combined!==null).reduce((s,r)=>s+(r.isStrokeHole&&weakerIsTeam1?r.t1Combined-1:r.t1Combined),0);
-    const t2NetTotal=holeResults.filter(r=>r.t2Combined!==null).reduce((s,r)=>s+(r.isStrokeHole&&!weakerIsTeam1?r.t2Combined-1:r.t2Combined),0);
-    let team1TotalsPts=0, team2TotalsPts=0;
-    if(bothComplete){
-      if(t1NetTotal<t2NetTotal){team1TotalsPts=4;team2TotalsPts=0;}
-      else if(t1NetTotal===t2NetTotal){team1TotalsPts=2;team2TotalsPts=2;}
-      else{team1TotalsPts=0;team2TotalsPts=4;}
-    }
-    const team1Final=team1HolePts+team1TotalsPts;
-    const team2Final=team2HolePts+team2TotalsPts;
-
-    // Helper: build one team block (rows matching Excel layout)
-    const buildTeamBlock = (teamDisplay, teamHdcp, pids, holePts, totalsPts, finalPts, netTotal, isWeaker) => {
-      const p1name=getPlayerName(pids[0]), p2name=getPlayerName(pids[1]);
-      const p1hc=getEffectiveHandicap(pids[0]), p2hc=getEffectiveHandicap(pids[1]);
-
-      // HCP row: 1 on each stroke hole (relative to this team being weaker)
-      const hcpRow=['','HCP'];
-      for(let h=0;h<9;h++){
-        hcpRow.push(isWeaker&&strokeHoles.includes(h)?1:'');
-      }
-      hcpRow.push('','');
-
-      // Header row
-      wsData.push(['','HOLE',1,2,3,4,5,6,7,8,9,'','']);
-      wsData.push(hcpRow);
-      wsData.push(['','','','','','','','','','','','Total','']);
-
-      // Player 1 row
-      const p1row=[p1name, p1hc];
-      let p1total=0;
-      for(let h=1;h<=9;h++){const s=getScore(pids[0],h);p1row.push(s!==null?s:'');if(s!==null)p1total+=s;}
-      p1row.push(p1total>0?p1total:'','');
-      wsData.push(p1row);
-
-      // Player 2 row
-      const p2row=[p2name, p2hc];
-      let p2total=0;
-      for(let h=1;h<=9;h++){const s=getScore(pids[1],h);p2row.push(s!==null?s:'');if(s!==null)p2total+=s;}
-      p2row.push(p2total>0?p2total:'','');
-      wsData.push(p2row);
-
-      // Team row: combined hdcp, net total
-      const teamNetTotal=netTotal>0?netTotal:'';
-      wsData.push(['Team',teamHdcp,'','','','','','','','','',teamNetTotal,'']);
-
-      // Pts row: hole-by-hole points
-      const ptsRow=['Pts',''];
-      for(let h=1;h<=9;h++){
-        const r=holeResults.find(x=>x.h===h);
-        // Determine pts for this team
-        let pts=null;
-        if(r&&r.t1both&&r.t2both){
-          // figure out if this is team1 or team2 based on pids
-          const isTeam1=pids[0]===t1.pids[0]||pids[0]===t1.pids[1];
-          pts=isTeam1?r.t1pts:r.t2pts;
+      // Per-hole results
+      var team1HolePts=0, team2HolePts=0;
+      var team1Strokes=0, team2Strokes=0;
+      var team1Played=0, team2Played=0;
+      var hr = [];
+      for (var h = 1; h <= 9; h++) {
+        var hIdx = h - 1;
+        var t1s1 = (scoreMap[t1.pids[0]]||{})[h] !== undefined ? (scoreMap[t1.pids[0]]||{})[h] : null;
+        var t1s2 = (scoreMap[t1.pids[1]]||{})[h] !== undefined ? (scoreMap[t1.pids[1]]||{})[h] : null;
+        var t2s1 = (scoreMap[t2.pids[0]]||{})[h] !== undefined ? (scoreMap[t2.pids[0]]||{})[h] : null;
+        var t2s2 = (scoreMap[t2.pids[1]]||{})[h] !== undefined ? (scoreMap[t2.pids[1]]||{})[h] : null;
+        var t1both = t1s1 !== null && t1s2 !== null;
+        var t2both = t2s1 !== null && t2s2 !== null;
+        var t1c = t1both ? t1s1 + t1s2 : null;
+        var t2c = t2both ? t2s1 + t2s2 : null;
+        var isStroke = strokeHoles.indexOf(hIdx) >= 0;
+        var t1n = t1c, t2n = t2c;
+        if (isStroke) {
+          if (weakerIsTeam1 && t1n !== null) t1n -= 1;
+          else if (!weakerIsTeam1 && t2n !== null) t2n -= 1;
         }
-        ptsRow.push(pts!==null?pts:'');
+        var t1pts = '', t2pts = '';
+        if (t1both && t2both) {
+          if (t1n < t2n)      { t1pts=2; t2pts=0; }
+          else if (t1n===t2n) { t1pts=1; t2pts=1; }
+          else                 { t1pts=0; t2pts=2; }
+          team1HolePts += t1pts;
+          team2HolePts += t2pts;
+        }
+        if (t1both) { team1Strokes += t1c; team1Played++; }
+        if (t2both) { team2Strokes += t2c; team2Played++; }
+        hr.push({ h:h, hIdx:hIdx, t1c:t1c, t2c:t2c, t1n:t1n, t2n:t2n, isStroke:isStroke, t1pts:t1pts, t2pts:t2pts, t1both:t1both, t2both:t2both });
       }
-      ptsRow.push(holePts,'Hole Pts');
-      wsData.push(ptsRow);
 
-      // Totals pts row
-      wsData.push(['','','','','','','','','','','',totalsPts,'Totals Pts']);
+      var bothComplete = team1Played===9 && team2Played===9;
+      var t1NetTotal = 0, t2NetTotal = 0;
+      for (var ri = 0; ri < hr.length; ri++) {
+        if (hr[ri].t1c !== null) t1NetTotal += (hr[ri].isStroke && weakerIsTeam1 ? hr[ri].t1c - 1 : hr[ri].t1c);
+        if (hr[ri].t2c !== null) t2NetTotal += (hr[ri].isStroke && !weakerIsTeam1 ? hr[ri].t2c - 1 : hr[ri].t2c);
+      }
+      var team1TotPts=0, team2TotPts=0;
+      if (bothComplete) {
+        if (t1NetTotal < t2NetTotal)       { team1TotPts=4; team2TotPts=0; }
+        else if (t1NetTotal === t2NetTotal) { team1TotPts=2; team2TotPts=2; }
+        else                                { team1TotPts=0; team2TotPts=4; }
+      }
+      var team1Final = team1HolePts + team1TotPts;
+      var team2Final = team2HolePts + team2TotPts;
 
-      // Final pts row
-      wsData.push(['','','','','','','','','','','',finalPts,'Final Pts']);
-    };
+      // Write team block inline (no nested function)
+      for (var pass = 0; pass < 2; pass++) {
+        var pids   = pass===0 ? t1.pids : t2.pids;
+        var tHdcp  = pass===0 ? team1Hdcp : team2Hdcp;
+        var holePts= pass===0 ? team1HolePts : team2HolePts;
+        var totPts = pass===0 ? team1TotPts : team2TotPts;
+        var finPts = pass===0 ? team1Final : team2Final;
+        var netTot = pass===0 ? team1Strokes : team2Strokes;
+        var isWeaker = pass===0 ? weakerIsTeam1 : !weakerIsTeam1;
 
-    // Team 1 block
-    buildTeamBlock(t1, team1Hdcp, t1.pids, team1HolePts, team1TotalsPts, team1Final, team1TotalStrokes, weakerIsTeam1);
+        var p1n = allSelectablePlayers().find(function(p){ return p.id===pids[0]; });
+        var p2n = allSelectablePlayers().find(function(p){ return p.id===pids[1]; });
+        var p1name = p1n ? p1n.name : '?';
+        var p2name = p2n ? p2n.name : '?';
+        var p1hc = getEffectiveHandicap(pids[0]);
+        var p2hc = getEffectiveHandicap(pids[1]);
 
-    // vs separator
-    wsData.push(['vs','','','','','','','','','','','','']);
-    wsData.push(['','','','','','','','','','','','','']);
+        // HOLE header row
+        wsData.push(['', 'HOLE', 1, 2, 3, 4, 5, 6, 7, 8, 9, '', '']);
 
-    // Team 2 block
-    buildTeamBlock(t2, team2Hdcp, t2.pids, team2HolePts, team2TotalsPts, team2Final, team2TotalStrokes, !weakerIsTeam1);
+        // HCP row
+        var hcpRow = ['', 'HCP'];
+        for (var hh = 0; hh < 9; hh++) {
+          hcpRow.push(isWeaker && strokeHoles.indexOf(hh) >= 0 ? 1 : '');
+        }
+        hcpRow.push('', '');
+        wsData.push(hcpRow);
 
-    // Blank separator between matchups
-    wsData.push(['','','','','','','','','','','','','']);
-    wsData.push(['','','','','','','','','','','','','']);
-  });
+        // Total label row
+        wsData.push(['', '', '', '', '', '', '', '', '', '', '', 'Total', '']);
 
-  const ws=XLSX.utils.aoa_to_sheet(wsData);
-  ws['!cols']=[{wch:22},{wch:6},...Array(9).fill({wch:6}),{wch:8},{wch:10}];
-  XLSX.utils.book_append_sheet(wb,ws,`Week ${weekNum}`);
-  XLSX.writeFile(wb,`RCC_Week${weekNum}_Results.xlsx`);
-  msg.textContent='Downloaded!';msg.className='admin-msg ok';
-  setTimeout(()=>{msg.textContent='';},3000);
+        // Player 1 row
+        var p1row = [p1name, p1hc];
+        var p1tot = 0;
+        for (var hh = 1; hh <= 9; hh++) {
+          var s = (scoreMap[pids[0]]||{})[hh] !== undefined ? (scoreMap[pids[0]]||{})[hh] : '';
+          p1row.push(s !== '' ? s : '');
+          if (s !== '') p1tot += s;
+        }
+        p1row.push(p1tot > 0 ? p1tot : '', '');
+        wsData.push(p1row);
+
+        // Player 2 row
+        var p2row = [p2name, p2hc];
+        var p2tot = 0;
+        for (var hh = 1; hh <= 9; hh++) {
+          var s = (scoreMap[pids[1]]||{})[hh] !== undefined ? (scoreMap[pids[1]]||{})[hh] : '';
+          p2row.push(s !== '' ? s : '');
+          if (s !== '') p2tot += s;
+        }
+        p2row.push(p2tot > 0 ? p2tot : '', '');
+        wsData.push(p2row);
+
+        // Team row
+        wsData.push(['Team', tHdcp, '', '', '', '', '', '', '', '', '', netTot > 0 ? netTot : '', '']);
+
+        // Pts row (hole-by-hole)
+        var ptsRow = ['Pts', ''];
+        for (var hh = 0; hh < hr.length; hh++) {
+          var pts = pass===0 ? hr[hh].t1pts : hr[hh].t2pts;
+          ptsRow.push(pts !== '' ? pts : '');
+        }
+        ptsRow.push(holePts, 'Hole Pts');
+        wsData.push(ptsRow);
+
+        // Totals Pts row
+        wsData.push(['', '', '', '', '', '', '', '', '', '', '', totPts, 'Totals Pts']);
+
+        // Final Pts row
+        wsData.push(['', '', '', '', '', '', '', '', '', '', '', finPts, 'Final Pts']);
+
+        if (pass === 0) {
+          wsData.push(['vs', '', '', '', '', '', '', '', '', '', '', '', '']);
+          wsData.push(['', '', '', '', '', '', '', '', '', '', '', '', '']);
+        }
+      }
+
+      // Blank separator between matchups
+      wsData.push(['', '', '', '', '', '', '', '', '', '', '', '', '']);
+      wsData.push(['', '', '', '', '', '', '', '', '', '', '', '', '']);
+    }
+
+    var ws = XLSX.utils.aoa_to_sheet(wsData);
+    ws['!cols'] = [{wch:22},{wch:5},
+      {wch:5},{wch:5},{wch:5},{wch:5},{wch:5},{wch:5},{wch:5},{wch:5},{wch:5},
+      {wch:8},{wch:10}];
+    XLSX.utils.book_append_sheet(wb, ws, 'Week ' + weekNum);
+    XLSX.writeFile(wb, 'RCC_Week' + weekNum + '_Results.xlsx');
+    msg.textContent = 'Downloaded!';
+    msg.className = 'admin-msg ok';
+    setTimeout(function(){ msg.textContent=''; }, 3000);
+
+  } catch(err) {
+    console.error('Export error:', err);
+    msg.textContent = 'Export error: ' + err.message;
+    msg.className = 'admin-msg err';
+  }
 }
 
 async function saveMatchupOverrides(matchupId) {
