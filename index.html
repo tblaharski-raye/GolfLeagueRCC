@@ -1229,7 +1229,7 @@ function renderGroupScorecard() {
         <strong>${groupPlayers.map(p=>p.name.split(' ')[0]).join(', ')}</strong>
         ${filledCells} of ${totalCells} holes entered
       </div>
-      <button class="btn-finish-group" onclick="finishGroup()">← Done</button>
+      <button class="btn-finish-group" onclick="finishGroup()">Save</button>
     </div>`;
 }
 
@@ -1283,7 +1283,7 @@ async function clearScore() {
 }
 function dismissPopover() { document.getElementById('popoverOverlay').classList.remove('open'); }
 function closePopover(e) { if(e.target===document.getElementById('popoverOverlay')) dismissPopover(); }
-function finishGroup() { toast('Scores saved! 🏌️'); exitGroupScorecard(); }
+function finishGroup() { toast('Scores saved! 🏌️'); }
 
 // ── ADMIN ─────────────────────────────────────────────────────────────────────
 function renderAdmin() {
@@ -1826,7 +1826,10 @@ function switchTab(tab) {
   const tabs=['scoreboard','entry','admin'];
   document.querySelectorAll('.tab-btn').forEach((t,i)=>t.classList.toggle('active',tabs[i]===tab));
   tabs.forEach(v=>document.getElementById('view-'+v).classList.toggle('active',v===tab));
-  if(tab==='scoreboard') switchSegment(activeSegment||'players');
+  if(tab==='scoreboard') {
+    switchSegment(activeSegment||'players');
+    loadScores().then(()=>{ renderScoreboard(); renderMatchupScores(); });
+  }
 }
 
 function switchSegment(seg) {
