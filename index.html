@@ -35,6 +35,11 @@
 
   /* MAIN */
   .main { max-width:700px; margin:0 auto; padding:18px 14px 90px; }
+
+  /* SEGMENTED CONTROL */
+  .segment-wrap { display:flex; background:#e8e0d0; border-radius:10px; padding:3px; margin-bottom:16px; }
+  .segment-btn { flex:1; padding:8px; background:transparent; border:none; border-radius:8px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; font-size:13px; font-weight:600; color:#888; cursor:pointer; transition:all 0.18s; -webkit-appearance:none; }
+  .segment-btn.active { background:#ffffff; color:#1a3a2a; box-shadow:0 1px 4px rgba(0,0,0,0.12); }
   .view { display:none; }
   .view.active { display:block; }
 
@@ -360,16 +365,21 @@
     <div class="round-badge" id="roundBadge">Loading...</div>
   </div>
   <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('scoreboard')">⛳ Scoreboard</button>
-    <button class="tab-btn" onclick="switchTab('matchups')">🏆 Matchup Scores</button>
-    <button class="tab-btn" onclick="switchTab('entry')">✏️ Enter Scores</button>
+    <button class="tab-btn active" onclick="switchTab('scoreboard')">📊 Scoreboard</button>
+    <button class="tab-btn" onclick="switchTab('entry')">⛳ Scorecard</button>
     <button class="tab-btn" onclick="switchTab('admin')">⚙️ Admin</button>
   </div>
 </div>
 
 <div class="main">
-  <div class="view active" id="view-scoreboard"><div id="scoreboardContent"></div></div>
-  <div class="view" id="view-matchups"><div id="matchupsContent"></div></div>
+  <div class="view active" id="view-scoreboard">
+    <div class="segment-wrap">
+      <button class="segment-btn active" id="seg-players" onclick="switchSegment('players')">Players</button>
+      <button class="segment-btn" id="seg-matchups" onclick="switchSegment('matchups')">Matchups</button>
+    </div>
+    <div id="scoreboardContent"></div>
+    <div id="matchupsContent" style="display:none;"></div>
+  </div>
   <div class="view" id="view-entry"><div id="entryContent"></div></div>
   <div class="view" id="view-admin"><div id="adminContent"></div></div>
 </div>
@@ -634,7 +644,8 @@ async function loadScores() {
     scoreMap[s.player_id][s.hole] = s.strokes;
   });
   const { data: mx } = await sb.from('matchups').select('*').eq('round_id',activeRound.id).order('created_at');
-  matchups = mx || [];
+  const seen = new Set();
+  matchups = (mx||[]).filter(m => { if(seen.has(m.id)) return false; seen.add(m.id); return true; });
   if (groupMode && selectedGroup.length>0) {
     selectedGroup.forEach(pid => {
       if (pid.startsWith('sub_')) return;
@@ -1809,10 +1820,20 @@ async function reactivateRound(roundId) {
 }
 
 // ── TABS ──────────────────────────────────────────────────────────────────────
+let activeSegment = 'players';
+
 function switchTab(tab) {
-  const tabs=['scoreboard','matchups','entry','admin'];
+  const tabs=['scoreboard','entry','admin'];
   document.querySelectorAll('.tab-btn').forEach((t,i)=>t.classList.toggle('active',tabs[i]===tab));
-  tabs.forEach(v=>document.getElementById(`view-${v}`).classList.toggle('active',v===tab));
+  tabs.forEach(v=>document.getElementById('view-'+v).classList.toggle('active',v===tab));
+}
+
+function switchSegment(seg) {
+  activeSegment = seg;
+  document.getElementById('seg-players').classList.toggle('active', seg==='players');
+  document.getElementById('seg-matchups').classList.toggle('active', seg==='matchups');
+  document.getElementById('scoreboardContent').style.display = seg==='players' ? '' : 'none';
+  document.getElementById('matchupsContent').style.display = seg==='matchups' ? '' : 'none';
 }
 
 init();
